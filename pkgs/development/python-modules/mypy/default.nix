@@ -4,7 +4,7 @@
 }:
 buildPythonPackage rec {
   pname = "mypy";
-  version = "0.812";
+  version = "0.910";
   disabled = !isPy3k;
 
   src = fetchPypi {

@@ -8,6 +8,7 @@ self = rec {
     gcc stdenv
     openssl fuse libuv libmysqlclient libfixposix libev sqlite
     freetds
+    ncurses
     lispPackages.quicklisp-to-nix lispPackages.quicklisp-to-nix-system-info
   ];
   CPATH = lib.makeSearchPath "include"
@@ -25,6 +26,7 @@ self = rec {
       libfixposix
       libmysqlclient
       libuv
+      ncurses
       openblas
       openssl
       openssl_lib_marked

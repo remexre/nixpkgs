@@ -293,4 +293,5 @@ $out/lib/common-lisp/query-fs"
   };
   lla = addNativeLibs [ pkgs.openblas ];
 #  cl-opengl = addNativeLibs [ pkgs.libGL pkgs.glfw ];
+  cl-charms = addNativeLibs [ pkgs.ncurses ];
 }

@@ -4682,6 +4682,20 @@ let quicklisp-to-nix-packages = rec {
        }));
 
 
+  "cl-charms" = buildLispPackage
+    ((f: x: (x // (f x)))
+       (qlOverrides."cl-charms" or (x: {}))
+       (import ./quicklisp-to-nix-output/cl-charms.nix {
+         inherit fetchurl;
+           "alexandria" = quicklisp-to-nix-packages."alexandria";
+           "babel" = quicklisp-to-nix-packages."babel";
+           "cffi" = quicklisp-to-nix-packages."cffi";
+           "cffi-grovel" = quicklisp-to-nix-packages."cffi-grovel";
+           "cffi-toolchain" = quicklisp-to-nix-packages."cffi-toolchain";
+           "trivial-features" = quicklisp-to-nix-packages."trivial-features";
+       }));
+
+
   "cl-cffi-gtk" = buildLispPackage
     ((f: x: (x // (f x)))
        (qlOverrides."cl-cffi-gtk" or (x: {}))

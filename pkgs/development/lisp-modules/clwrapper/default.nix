@@ -1,10 +1,10 @@
-{lib, stdenv, asdf, which, bash, lisp ? null}:
+{ lib, stdenv, asdf, which, bash, lisp ? null }:
 stdenv.mkDerivation {
   name = "cl-wrapper-script";
 
-  buildPhase="";
+  buildPhase = "";
 
-  installPhase=''
+  installPhase = ''
     mkdir -p "$out"/bin
     export head="$(which head)"
     export ls="$(which ls)"
@@ -22,6 +22,8 @@ stdenv.mkDerivation {
 
     mkdir -p "$out/lib/common-lisp/"
     cp -r "${asdf}/lib/common-lisp"/* "$out/lib/common-lisp/"
+    chmod 644 "$out/lib/common-lisp/asdf/source-registry.lisp"
+    echo '(trace process-source-registry process-source-registry-directive inherit-source-registry initialize-source-registry)' >> $out/lib/common-lisp/asdf/source-registry.lisp
     chmod u+rw -R "$out/lib/common-lisp/"
 
     NIX_LISP_PRELAUNCH_HOOK='
@@ -35,7 +37,7 @@ stdenv.mkDerivation {
       "$out/bin/common-lisp.sh"
   '';
 
-  buildInputs = [which];
+  buildInputs = [ which ];
 
   inherit asdf lisp bash;
   stdenv_shell = stdenv.shell;
@@ -44,14 +46,12 @@ stdenv.mkDerivation {
 
   dontUnpack = true;
 
-  ASDF_OUTPUT_TRANSLATIONS="${builtins.storeDir}/:${builtins.storeDir}";
+  ASDF_OUTPUT_TRANSLATIONS = "${builtins.storeDir}/:${builtins.storeDir}";
 
-  passthru = {
-    inherit lisp;
-  };
+  passthru = { inherit lisp; };
 
   meta = {
     description = "Script used to wrap Common Lisp implementations";
-    maintainers = [lib.maintainers.raskin];
+    maintainers = [ lib.maintainers.raskin ];
   };
 }

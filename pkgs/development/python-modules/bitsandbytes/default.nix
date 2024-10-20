@@ -19,11 +19,13 @@ let
   # NOTE: torchvision doesn't use cudnn; torch does!
   #   For this reason it is not included.
   cuda-common-redist = with cudaPackages; [
-    cuda_cccl # <thrust/*>
-    libcublas # cublas_v2.h
+    cuda_cccl.dev # <thrust/*>
+    libcublas.dev # cublas_v2.h
+    libcublas.lib
     libcurand
     libcusolver # cusolverDn.h
-    libcusparse # cusparse.h
+    libcusparse.dev # cusparse.h
+    libcusparse.lib
   ];
 
   cuda-native-redist = symlinkJoin {
@@ -31,7 +33,9 @@ let
     paths =
       with cudaPackages;
       [
-        cuda_cudart # cuda_runtime.h cuda_runtime_api.h
+        cuda_cudart.dev # cuda_runtime.h cuda_runtime_api.h
+        cuda_cudart.lib
+        cuda_cudart.static
         cuda_nvcc
       ]
       ++ cuda-common-redist;
@@ -65,13 +69,17 @@ buildPythonPackage {
   buildInputs = lib.optionals cudaSupport [ cuda-redist ];
 
   preBuild =
-    let
-      backend = if cudaSupport then "cuda" else "cpu";
-    in
-    ''
-      cmake -DCOMPUTE_BACKEND=${backend} -S .
-      make
-    '';
+    if cudaSupport then
+      ''
+        export NVCC_APPEND_FLAGS="-I${cuda-native-redist}/include -L${cuda-native-redist}/lib"
+        cmake -DCMAKE_CXX_FLAGS="-I${cuda-native-redist}/include" -DCOMPUTE_BACKEND=cuda -S .
+        make
+      ''
+    else
+      ''
+        cmake -DCOMPUTE_BACKEND=cpu -S .
+        make
+      '';
 
   dependencies = [
     scipy

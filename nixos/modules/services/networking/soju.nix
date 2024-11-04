@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
@@ -6,13 +11,12 @@ let
   cfg = config.services.soju;
   stateDir = "/var/lib/soju";
   runtimeDir = "/run/soju";
-  listen = cfg.listen
-    ++ optional cfg.adminSocket.enable "unix+admin://${runtimeDir}/admin";
+  listen = cfg.listen ++ optional cfg.adminSocket.enable "unix+admin://${runtimeDir}/admin";
   listenCfg = concatMapStringsSep "\n" (l: "listen ${l}") listen;
-  tlsCfg = optionalString (cfg.tlsCertificate != null)
-    "tls ${cfg.tlsCertificate} ${cfg.tlsCertificateKey}";
-  logCfg = optionalString cfg.enableMessageLogging
-    "log fs ${stateDir}/logs";
+  tlsCfg = optionalString (
+    cfg.tlsCertificate != null
+  ) "tls ${cfg.tlsCertificate} ${cfg.tlsCertificateKey}";
+  logCfg = optionalString cfg.enableMessageLogging "log fs ${stateDir}/logs";
 
   configFile = pkgs.writeText "soju.conf" ''
     ${listenCfg}
@@ -29,6 +33,8 @@ let
   sojuctl = pkgs.writeShellScriptBin "sojuctl" ''
     exec ${cfg.package}/bin/sojuctl --config ${configFile} "$@"
   '';
+
+  mkCertOwnershipAssertion = import ../../security/acme/mk-cert-ownership-assertion.nix;
 in
 {
   ###### interface
@@ -53,6 +59,15 @@ in
       default = config.networking.hostName;
       defaultText = literalExpression "config.networking.hostName";
       description = "Server hostname.";
+    };
+
+    enableACME = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Whether to ask Let's Encrypt to sign a certificate for this vhost.
+        Alternately, you can use an existing certificate through {option}`tlsCertificate` and {option}`tlsCertificateKey`.
+      '';
     };
 
     tlsCertificate = mkOption {
@@ -85,7 +100,7 @@ in
 
     httpOrigins = mkOption {
       type = types.listOf types.str;
-      default = [];
+      default = [ ];
       description = ''
         List of allowed HTTP origins for WebSocket listeners. The parameters are
         interpreted as shell patterns, see
@@ -95,7 +110,7 @@ in
 
     acceptProxyIP = mkOption {
       type = types.listOf types.str;
-      default = [];
+      default = [ ];
       description = ''
         Allow the specified IPs to act as a proxy. Proxys have the ability to
         overwrite the remote and local connection addresses (via the X-Forwarded-\*
@@ -114,15 +129,29 @@ in
   ###### implementation
 
   config = mkIf cfg.enable {
-    assertions = [
-      {
-        assertion = (cfg.tlsCertificate != null) == (cfg.tlsCertificateKey != null);
-        message = ''
-          services.soju.tlsCertificate and services.soju.tlsCertificateKey
-          must both be specified to enable TLS.
-        '';
-      }
-    ];
+    assertions =
+      [
+        {
+          assertion = cfg.enableACME -> (cfg.tlsCertificate == null) && (cfg.tlsCertificateKey == null);
+          message = ''
+            services.soju.enableACME replaces services.soju.tlsCertificate and
+            services.soju.tlsCertificateKey when used.
+          '';
+        }
+        {
+          assertion = (cfg.tlsCertificate != null) == (cfg.tlsCertificateKey != null);
+          message = ''
+            services.soju.tlsCertificate and services.soju.tlsCertificateKey
+            must both be specified to enable TLS.
+          '';
+        }
+      ]
+      ++ optional cfg.enableACME (mkCertOwnershipAssertion {
+        group = "soju";
+        user = "soju";
+        cert = config.security.acme.certs.${cfg.hostName};
+        groups = config.users.groups;
+      });
 
     environment.systemPackages = [ sojuctl ];
 
@@ -130,16 +159,32 @@ in
       description = "soju IRC bouncer";
       wantedBy = [ "multi-user.target" ];
       wants = [ "network-online.target" ];
-      after = [ "network-online.target" ];
+      requires = optional cfg.enableACME "acme-finished-${cfg.hostName}.target";
+      after = [
+        "network-online.target"
+      ] ++ optional cfg.enableACME "acme-finished-${cfg.hostName}.target";
       serviceConfig = {
-        DynamicUser = true;
         Restart = "always";
         ExecStart = "${cfg.package}/bin/soju -config ${configFile}";
+        User = "soju";
+        Group = "soju";
         StateDirectory = "soju";
         RuntimeDirectory = "soju";
       };
     };
+
+    users = {
+      users.soju = {
+        isSystemUser = true;
+        group = "soju";
+        extraGroups = optional cfg.enableACME "acme";
+      };
+      groups.soju = { };
+    };
   };
 
-  meta.maintainers = with maintainers; [ malte-v ];
+  meta.maintainers = with maintainers; [
+    malte-v
+    remexre
+  ];
 }
